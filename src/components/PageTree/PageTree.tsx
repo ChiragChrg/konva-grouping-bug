@@ -1,19 +1,12 @@
 import { propertiesSignal } from '@/store/signals';
 import { getBoundingBox } from '@/utils/commonUtils';
 import Konva from 'konva';
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Stage, Rect, Group } from 'react-konva'
 
 type RectPos = { x: number; y: number };
 
 const RECT_SIZE = 100;
-const INITIAL_RECTS: RectPos[] = [
-    { x: 0, y: 0 },
-    { x: 400, y: 0 },
-    { x: 0, y: 400 },
-    { x: 400, y: 400 },
-    { x: 200, y: 200 },
-];
 
 const PageTree: React.FC = () => {
     // #region Local State
@@ -24,7 +17,7 @@ const PageTree: React.FC = () => {
     });
 
     // State to store the positions of the rectangles
-    const [rects, setRects] = useState<RectPos[]>(INITIAL_RECTS);
+    const [rects, setRects] = useState<RectPos[]>([]);
 
     // State to store the dimensions of the selection container
     const [selectedRectIndex, setSelectedRectIndex] = useState<string | null>(null);
@@ -46,17 +39,34 @@ const PageTree: React.FC = () => {
      * Effect that sets the stage dimensions based on the page tree dimensions.
      * It runs once when the component mounts and whenever the page tree reference changes.
      */
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!pageTreeRef.current) return;
 
-        // Set the stage dimensions to the page tree dimensions
+        const stageX = pageTreeRef.current.clientWidth - 100;
+        const stageY = pageTreeRef.current.clientHeight - 100;
+
         setStageDimensions({
-            width: pageTreeRef.current.clientWidth - 100,
-            height: pageTreeRef.current.clientHeight - 100
+            width: stageX,
+            height: stageY
         });
+
+        const INITIAL_RECTS: RectPos[] = [
+            { x: stageX - 1000, y: stageY - 500 },
+            { x: stageX - 500, y: stageY - 500 },
+            { x: stageX - 500, y: stageY },
+            { x: stageX - 1000, y: stageY },
+            { x: stageX - 750, y: stageY - 250 },
+        ];
+
+        setRects(INITIAL_RECTS);
     }, [pageTreeRef]);
 
     // #endregion
+
+    const centerOffset = useMemo(() => ({
+        x: (stageDimensions.width - groupBox.width) / 2 - groupBox.x,
+        y: (stageDimensions.height - groupBox.height) / 2 - groupBox.y,
+    }), [stageDimensions, groupBox]);
 
     return (
         <div
@@ -68,32 +78,23 @@ const PageTree: React.FC = () => {
                 height={stageDimensions.height}
                 className='bg-white'>
                 <Layer>
-                    {/* <SelectionBox
-                        name="SelectionContainer"
-                        className="SelectionContainer"
-                    />
-
-                    <Transformer
-                        name="Transformer"
-                        className="Transformer"
-                    /> */}
-
                     {/* Shapes */}
                     <Group
                         name={`group`}
                         id={`group`}
-                        x={groupBox.x}
-                        y={groupBox.y}
+                        x={centerOffset.x}
+                        y={centerOffset.y}
                         // Update Properties Section
                         onClick={e => propertiesSignal.value = e.target.getClientRect()}
                         onDragMove={e => propertiesSignal.value = e.target.getClientRect()}
                         onDragEnd={e => propertiesSignal.value = e.target.getClientRect()}
                         draggable
                         dragBoundFunc={pos => {
-                            const minX = 0;
-                            const minY = 0;
-                            const maxX = stageDimensions.width - groupBox.width;
-                            const maxY = stageDimensions.height - groupBox.height;
+                            const minX = 0 - groupBox.x;
+                            const minY = 0 - groupBox.y;
+                            const maxX = stageDimensions.width - groupBox.width - groupBox.x;
+                            const maxY = stageDimensions.height - groupBox.height - groupBox.y;
+
                             return {
                                 x: Math.max(minX, Math.min(pos.x, maxX)),
                                 y: Math.max(minY, Math.min(pos.y, maxY)),
@@ -124,9 +125,28 @@ const PageTree: React.FC = () => {
                                 y={pos.y}
                                 width={RECT_SIZE}
                                 height={RECT_SIZE}
-                                fill={idx === 4 ? "green" : "red"}
+                                fill={idx === 4 ? "lime" : "orange"}
+                                strokeWidth={2}
+                                dash={[10, 5]}
                                 // Update Properties Section
                                 onClick={e => propertiesSignal.value = e.target.getClientRect()}
+                                onDblClick={(e) => {
+                                    setSelectedRectIndex(`rect-${idx}`)
+
+                                    // Clear stroke from all rects
+                                    const layer = e.target.getLayer();
+                                    if (layer) {
+                                        layer.find('Rect').forEach(node => {
+                                            node.setAttr('stroke', null);
+                                        });
+                                    }
+
+                                    // Add stroke to selected rect
+                                    e.target.setAttr('stroke', 'blue');
+
+                                    // Force layer to redraw
+                                    e.target.getLayer()?.batchDraw();
+                                }}
                                 onDragMove={e => propertiesSignal.value = e.target.getClientRect()}
                                 onDragEnd={e => {
                                     const rectBox = e.target.getClientRect();
@@ -134,7 +154,6 @@ const PageTree: React.FC = () => {
 
                                     setRects(prev => prev.map((r, i) => (i === idx ? { x: rectBox.x, y: rectBox.y } : r)));
                                 }}
-                                onDblClick={() => setSelectedRectIndex(`rect-${idx}`)}
                                 draggable={selectedRectIndex === `rect-${idx}`}
                                 dragBoundFunc={pos => {
                                     const minX = 0;
