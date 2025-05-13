@@ -149,10 +149,12 @@ const PageTree: React.FC = () => {
                                 }}
                                 onDragMove={e => propertiesSignal.value = e.target.getClientRect()}
                                 onDragEnd={e => {
-                                    const rectBox = e.target.getClientRect();
-                                    propertiesSignal.value = rectBox;
+                                    propertiesSignal.value = e.target.getClientRect();
 
-                                    setRects(prev => prev.map((r, i) => (i === idx ? { x: rectBox.x, y: rectBox.y } : r)));
+                                    const pos = e.target.position();
+                                    setRects(prev => prev.map((r, i) =>
+                                        i === idx ? { x: pos.x, y: pos.y } : r
+                                    ));
                                 }}
                                 draggable={selectedRectIndex === `rect-${idx}`}
                                 dragBoundFunc={pos => {
